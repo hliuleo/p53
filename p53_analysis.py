@@ -12,6 +12,8 @@ from plot_set import *
 import glob
 import os
 import matplotlib as mpl
+from matplotlib.ticker import FuncFormatter
+
 
 os.chdir(os.environ['p53']+os.sep+'analyzable_data')
 
@@ -78,12 +80,21 @@ def plot_Rg(trajs):
 
 
 def plot_Rg_Hist(trajs):
+
+    def to_percentage(y, position):
+        s = str(100*y)
+        return s+'%'
+
     binwidth = 100
     histtype = 'step'
     for traj in trajs:
-        plt.hist(traj.rg, binwidth, histtype=histtype, label=traj.name)
+        rg = traj.rg
+        w = np.ones_like(rg)/len(rg)
+        plt.hist(rg, binwidth, histtype=histtype, label=traj.name, weights=w)
+    fmt = FuncFormatter(to_percentage)
+    plt.gca().yaxis.set_major_formatter(fmt)
     plt.legend(frameon=False)
-    plt.ylabel('Frequency')
+    plt.ylabel('Percentage')
     plt.xlabel('Rg (nm)')
 
 
