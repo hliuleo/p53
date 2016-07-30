@@ -11,6 +11,7 @@ import numpy as np
 from plot_set import *
 import glob
 import os
+import matplotlib as mpl
 
 os.chdir(os.environ['p53']+os.sep+'analyzable_data')
 
@@ -70,7 +71,8 @@ def plot_Rg(trajs):
         y = ave(traj.rg, skip)
         x = np.arange(len(y))*skip
         plt.plot(x, y, label=traj.name)
-    plt.legend(ncol=3, bbox_to_anchor=(0, 1.02, 1, 0.102), loc=3, mode='expand', borderaxespad=0.)
+    l = plt.legend(ncol=3, bbox_to_anchor=(0, 1.02, 1, 0.102), loc=3, mode='expand', borderaxespad=0.)
+    l.get_frame().set_linewidth(mpl.rcParams['axes.linewidth'])
     plt.xlabel('Simulation steps')
     plt.ylabel('Rg (nm)')
 
