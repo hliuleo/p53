@@ -55,7 +55,7 @@ def getHeli(traj):
 def ave(prop, skip):
     rep = prop.shape[0]/skip
     prop = prop[: rep*skip].reshape((rep, skip))
-    prop = prop.mean(axis=0)
+    prop = prop.mean(axis=1)
     return prop
 
 
@@ -65,6 +65,31 @@ for idx, traj in enumerate(trajs):
 
 
 def plot_Rg(trajs):
+    skip = 100
     for traj in trajs:
-        plt.plot()
-        
+        y = ave(traj.rg, skip)
+        x = np.arange(len(y))*skip
+        plt.plot(x, y, label=traj.name)
+    plt.legend(ncol=3, bbox_to_anchor=(0, 1.02, 1, 0.102), loc=3, mode='expand', borderaxespad=0.)
+    plt.xlabel('Simulation steps')
+    plt.ylabel('Rg (nm)')
+
+
+def plot_Rg_Hist(trajs):
+    binwidth = 100
+    histtype = 'step'
+    for traj in trajs:
+        plt.hist(traj.rg, binwidth, histtype=histtype, label=traj.name)
+    plt.legend(frameon=False)
+    plt.ylabel('Frequency')
+    plt.xlabel('Rg (nm)')
+
+
+def plot_heli(trajs):
+    for traj in trajs:
+        y = traj.heli
+        x = np.arange(len(y))+1
+        plt.plot(x, y, label=traj.name)
+    plt.ylabel('Helicity (%)')
+    plt.xlabel('Residue #')
+    plt.legend(frameon=False)
