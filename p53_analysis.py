@@ -19,7 +19,8 @@ os.chdir(os.environ['p53']+os.sep+'analyzable_data')
 
 struct_funct = {'ss': lambda x: md.compute_dssp(x),
                 'rg': lambda x: md.compute_rg(x),
-                'heli': lambda x: _calHeli(x),
+                'heli': lambda x: calSSPercent(x, 'H'),
+                'beta': lambda x: calSSPercent(x, 'E')
               }
 
 
@@ -41,18 +42,11 @@ def getTraj(trajNameType, topFile):
     return trajs
 
 
-def _calHeli(traj):
+def calSSPercent(traj, ss_type):
     if not hasattr(traj, 'ss'):
        traj.ss = md.compute_ss(traj)
-    heli =  np.where(traj.ss=='H', 1, 0).mean(axis=0)*100
-    return heli
-
-
-def getHeli(traj):
-    if hasattr(traj, 'heli'):
-        return traj.heli
-    else:
-        traj.heli = traj._calHeli(traj)
+    percent =  np.where(traj.ss==ss_type, 1, 0).mean(axis=0)*100
+    return percent
 
 
 def ave(prop, skip):
@@ -64,7 +58,7 @@ def ave(prop, skip):
 
 for idx, traj in enumerate(trajs):
     traj.name = 'traj %d' % (idx+1)
-    addProperty2Traj(traj, struct_prop)
+    addProperty2Traj(traj, struct_funct)
 
 
 def plot_Rg(trajs):
@@ -98,11 +92,16 @@ def plot_Rg_Hist(trajs):
     plt.xlabel('Rg (nm)')
 
 
-def plot_heli(trajs):
+def plot_SSPercent(trajs, ss_type):
     for traj in trajs:
-        y = traj.heli
+        y = getattr(traj, ss_type)
         x = np.arange(len(y))+1
         plt.plot(x, y, label=traj.name)
-    plt.ylabel('Helicity (%)')
+    if ss_type == 'heli':
+        plt.ylabel('Helicity (%)')
+    elif ss_type == 'beta':
+        plt.ylabel('Beta content (%)')
     plt.xlabel('Residue #')
     plt.legend(frameon=False)
+    fmt = FuncFormatter(lambda y, position: str(y)+'%')
+    plt.gca().yaxis.set_major_formatter(fmt)
