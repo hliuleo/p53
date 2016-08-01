@@ -20,7 +20,8 @@ os.chdir(os.environ['p53']+os.sep+'analyzable_data')
 struct_funct = {'ss': lambda x: md.compute_dssp(x),
                 'rg': lambda x: md.compute_rg(x),
                 'heli': lambda x: calSSPercent(x, 'H'),
-                'beta': lambda x: calSSPercent(x, 'E')
+                'beta': lambda x: calSSPercent(x, 'E'),
+                'rmsd': lambda x: rmsds[x.name]
               }
 
 
@@ -56,24 +57,36 @@ def ave(prop, skip):
     return prop
 
 
+rmsd_dir = '/home/hliu/Project/p53/analysis/RMSD_next'
+rmsd_files = glob.glob1(rmsd_dir, '*.dat')
+rmsd_files.sort()
+rmsds = {}
+for idx, rmsd_f in enumerate(rmsd_files):
+    rmsds['traj %d' % (idx+1)] = np.loadtxt(rmsd_dir+os.sep+rmsd_f)
+
+
 for idx, traj in enumerate(trajs):
     traj.name = 'traj %d' % (idx+1)
     addProperty2Traj(traj, struct_funct)
 
 
-def plot_Rg(trajs):
-    skip = 100
+def plot_Time(trajs, prop):
+    skip = 1
     for traj in trajs:
-        y = ave(traj.rg, skip)
+        y = ave(getattr(traj, prop), skip)
         x = np.arange(len(y))*skip
         plt.plot(x, y, label=traj.name)
     l = plt.legend(ncol=3, bbox_to_anchor=(0, 1.02, 1, 0.102), loc=3, mode='expand', borderaxespad=0.)
     l.get_frame().set_linewidth(mpl.rcParams['axes.linewidth'])
     plt.xlabel('Simulation steps')
-    plt.ylabel('Rg (nm)')
+    
+    if prop == 'rg':
+        plt.ylabel('Rg (nm)')
+    elif prop == 'rmsd':
+        plt.ylabel('RMSD (A)')   
 
 
-def plot_Rg_Hist(trajs):
+def plot_Hist(trajs, prop):
 
     def to_percentage(y, position):
         s = str(100*y)
@@ -82,14 +95,18 @@ def plot_Rg_Hist(trajs):
     binwidth = 100
     histtype = 'step'
     for traj in trajs:
-        rg = traj.rg
-        w = np.ones_like(rg)/len(rg)
-        plt.hist(rg, binwidth, histtype=histtype, label=traj.name, weights=w)
+        prop_value = getattr(traj, prop)
+        w = np.ones_like(prop_value)/len(prop_value)
+        plt.hist(prop_value, binwidth, histtype=histtype, label=traj.name, weights=w)
     fmt = FuncFormatter(to_percentage)
     plt.gca().yaxis.set_major_formatter(fmt)
     plt.legend(frameon=False)
-    plt.ylabel('Percentage')
-    plt.xlabel('Rg (nm)')
+    if prop == 'rg':
+        plt.ylabel('Percentage')
+        plt.xlabel('Rg (nm)')
+    elif prop == 'rmsd':
+        plt.ylabel('Percentage')
+        plt.xlabel('RMSD (A)')        
 
 
 def plot_SSPercent(trajs, ss_type):
