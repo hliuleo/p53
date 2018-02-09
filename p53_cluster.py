@@ -7,8 +7,7 @@ Created on Tue Nov 29 15:33:37 2016
 
 import mdtraj as md
 import pandas as pd
-import numpy as np
-from plot_set import *
+from researchcode.plotting.plot_set import *
 import glob
 import os
 import matplotlib as mpl
@@ -24,8 +23,11 @@ from msmbuilder.utils import dump
 import msmexplorer as msme
 import matplotlib
 from msmbuilder.lumping import PCCAPlus
+import seaborn as sns
 
-os.chdir(os.environ['p53']+os.sep+'data/analyzable_data')
+#sns.set_style('ticks')
+colors = sns.color_palette()
+
 
 #t = md.load(trajNames, top='p53_prot.pdb')
 
@@ -59,7 +61,7 @@ def clusterData(tica_trajs, micro_num):
     return clustered_trajs, clusterer
 
 
-def drawMicroCluster():
+def drawMicroCluster(txx, clusterer):
     plt.hexbin(txx[:,0], txx[:,1], bins='log', mincnt=1, cmap='viridis')
     plt.scatter(clusterer.cluster_centers_[:,0],
                 clusterer.cluster_centers_[:,1], 
@@ -67,7 +69,7 @@ def drawMicroCluster():
 
 
 ## Define what to do for parallel execution
-def at_lagtime(lt):
+def at_lagtime(lt, clustered_trajs):
     msm = MarkovStateModel(lag_time=lt, n_timescales=20, verbose=False)
     msm.fit(clustered_trajs)
     ret = {
@@ -79,9 +81,10 @@ def at_lagtime(lt):
     return ret
 
 
-def calc_ImpliedTimescale():
+def calc_ImpliedTimescale(lagtimes, clustered_trajs):
     with Pool() as p:
-           results = p.map(at_lagtime, lagtimes)
+        results = p.map(lambda x: at_lagtime(x, clustered_trajs),
+                        lagtimes)
     
     timescales = pd.DataFrame(results)
     
@@ -91,13 +94,13 @@ def calc_ImpliedTimescale():
 
 
 ## Implied timescales vs lagtime
-def plot_timescales():
+def plot_timescales(timescales, n_timescales):
     for i in range(n_timescales):
         plt.plot(timescales['lag_time'],
                  timescales['timescale_{}'.format(i)],
                  c=colors[0]
                 )
-
+    ax = plt.gca()
     xmin, xmax = ax.get_xlim()
     xx = np.linspace(xmin, xmax)
     #plt.plot(xx, xx, color=colors[2], label='$y=x$')
@@ -121,14 +124,12 @@ def plot_trimmed(ax):
     ax.set_xscale('log')
     ax.set_ylim((0, 110))
 
-def draw_ImpliedTimescale():
+def draw_ImpliedTimescale(timescales, n_timescales):
 ## Plot timescales
     #matplotlib.use('Agg')
-    import seaborn as sns
-    #sns.set_style('ticks')
-    colors = sns.color_palette()
+
     #fig = plt.subplots(figsize=(7, 5))
-    plot_timescales()
+    plot_timescales(timescales, n_timescales)
     plt.tight_layout()
 #plt.xlim([0, 400])
 #plt.ylim([50, 1600])
@@ -140,7 +141,7 @@ def draw_ImpliedTimescale():
 #plot_trimmed(ax)
 #fig.tight_layout()
 
-def draw_MicroCluster_FreeEnergy():
+def draw_MicroCluster_FreeEnergy(txx, msm, clusterer, assignments):
     ax=msme.plot_free_energy(txx, obs=(0, 1), n_samples=10000,
                           pi=msm.populations_[assignments],
                           cmap='bone', alpha=0.5,vmin=-.001,
@@ -156,33 +157,29 @@ def draw_MicroCluster_FreeEnergy():
     plt.tight_layout()
 
     
-def check_MacroNum(n_timescales):
+def check_MacroNum(msm, n_timescales):
     msme.plot_timescales(msm, n_timescales=n_timescales,
                          ylabel='Implied Timescales ($ns$)')
 
 
 class MacroCluster():
 
-    def __init__(self, pcca, macro_num):
+    def __init__(self, pcca, macro_num, clustered_trajs):
         self.macro_num = macro_num
-        self.macro_trajs = pcca.transform(clustered_trajs)
         self.microstate_mapping_ = pcca.microstate_mapping_
-        self.macro_index = np.concatenate(self.macro_trajs)
+        self.getMacroTraj(pcca, clustered_trajs)
         self.macro_pop = self.getPop()
 
-    def do_lump(self, pcca):
-#        pcca = PCCAPlus.from_msm(msm,
-#                                 n_macrostates=self.macro_num)
-# if self.pcca then will have same pcca even though using diff macro_num
+    def getMacroTraj(self, pcca, clustered_trajs):
         self.macro_trajs = pcca.transform(clustered_trajs)
-        return pcca.microstate_mapping_
+        self.macro_index = np.concatenate(self.macro_trajs)
 
     def getPop(self):
         num = np.unique(self.macro_index).shape[0]
         pop = [np.where(self.macro_index == i)[0].shape[0] for i in range(num)]
         return np.array(pop)
 
-    def draw_MacroCluster_FreeEnergy(self, pcca):
+    def draw_MacroCluster_FreeEnergy(self, txx, clusterer, pcca, assignments):
         cm = plt.cm.get_cmap('RdYlBu')
         msme.plot_free_energy(txx, obs=(0, 1), n_samples=10000, vmin=-0.001,
                               pi=pcca.populations_[assignments],
@@ -208,57 +205,12 @@ def saveTrj(xyz_all, macro_index, savePth):
         traj_index = np.where(macro_index == i)[0]
         traj = xyz_all[0][traj_index]
         traj.save_xtc(savePth+os.sep+'macro_%d.xtc' % (i+1))
+        np.savetxt(savePth+os.sep+'macro_%d_cluster_index.dat'%(i+1),
+                   macro_index,
+                   fmt='%d')
 
-xyz = dataset('RSFF/*_skip5.xtc', topology='p53_prot.pdb')
-xyz_all = dataset('RSFF/combine/rsff_skip5.xtc', topology='p53_prot.pdb')
-dt = 50
 
-micro_num = 100
-tica_dim = 2
-tica_trajs = featurizeData(xyz, tica_dim)
-txx = np.concatenate(tica_trajs)
-clustered_trajs, clusterer = clusterData(tica_trajs, micro_num)
-lagtimes = list(range(1, 41, 2))
-drawMicroCluster()
-
-micro_index = np.concatenate(clustered_trajs)
-micro_pop = getPop(micro_index)
-
-timescales, n_timescales = calc_ImpliedTimescale()
-timescale = timescales*dt 
-draw_ImpliedTimescale()
-plt.ylim([5,10000])
-
-msm = MarkovStateModel(lag_time=1, n_timescales=20)
-msm.fit(clustered_trajs)
-assignments = clusterer.partial_transform(txx)
-assignments = msm.partial_transform(assignments)
-draw_MicroCluster_FreeEnergy()
-
-msm = MarkovStateModel(lag_time=30, n_timescales=20)
-msm.fit(clustered_trajs)
-
-for i in range(2, 11):
-    fig = plt.figure(i)
-    n_timescales = i
-    check_MacroNum(n_timescales)
-    fig.savefig('%d_timescales' % i)
-
-msm_build_macro = MarkovStateModel(lag_time=1, n_timescales=20)
-msm_build_macro.fit(clustered_trajs)
-macro_clusters = {}
-pcca_clusters = {}
-for i in range(2, 11):
-    fig = plt.figure(i)
-    pcca = PCCAPlus.from_msm(msm_build_macro, i)
-    pcca_clusters[i] = pcca
-    macro_clusters[i] = MacroCluster(pcca, i)
-    macro_clusters[i].draw_MacroCluster_FreeEnergy(pcca_clusters[i])
-    fig.savefig('%d_macrostates.png' % i)
-
-macro_num = 6
-savePth = '{}_macro_trajs'.format(macro_num)
-if os.path.exists(savePth):
-    os.system('rm -rf {}'.format(savePth))
-os.mkdir(savePth)
-saveTrj(xyz_all, macro_clusters[macro_num].macro_index, savePth)
+def getPop(index):
+    num = np.unique(index).shape[0]
+    pop = [np.where(index == i)[0].shape[0] for i in range(num)]
+    return np.array(pop)
