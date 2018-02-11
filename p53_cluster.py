@@ -37,12 +37,12 @@ def featurizeData(xyz, tica_dim):
     if os.path.exists('diheds'):
         os.system('rm -rf diheds')
     diheds = xyz.fit_transform_with(featurizer, 'diheds/', fmt='dir-npy')
-    
+
     scaler = RobustScaler()
     if os.path.exists('scaled_diheds'):
         os.system('rm -rf scaled_diheds')
     scaled_diheds = diheds.fit_transform_with(scaler, 'scaled_diheds/', fmt='dir-npy')
-    
+
     tica_model = tICA(lag_time=1, n_components=tica_dim)
     tica_model = scaled_diheds.fit_with(tica_model)
     if os.path.exists('ticas'):
@@ -82,9 +82,8 @@ def at_lagtime(lt, clustered_trajs):
 
 
 def calc_ImpliedTimescale(lagtimes, clustered_trajs):
-    with Pool() as p:
-        results = p.map(lambda x: at_lagtime(x, clustered_trajs),
-                        lagtimes)
+
+    results = list(map(lambda x: at_lagtime(x, clustered_trajs), lagtimes))
     
     timescales = pd.DataFrame(results)
     
@@ -206,7 +205,22 @@ def saveTrj(xyz_all, macro_index, savePth):
         traj = xyz_all[0][traj_index]
         traj.save_xtc(savePth+os.sep+'macro_%d.xtc' % (i+1))
         np.savetxt(savePth+os.sep+'macro_%d_cluster_index.dat'%(i+1),
-                   macro_index,
+                   traj_index,
+                   fmt='%d')
+
+def saveCenter(xyz_all, micro_state_mapping, micro_state_pop, center_idx, savePth):
+    macro_num = micro_state_mapping.max() + 1
+    for i in range(macro_num):
+        idx = np.where(micro_state_mapping==i)[0]
+        traj_idx = center_idx[idx]
+        c_idx = traj_idx[micro_state_pop[idx].argmax()]
+        traj = xyz_all[0][traj_idx]
+        center = xyz_all[0][c_idx]
+        center.save_pdb(savePth+os.sep+'macro_%d_center.pdb' % (i+1))
+        traj.save_xtc(savePth+os.sep+'macro_%d_centers.xtc' % (i+1))
+        np.savetxt(savePth+os.sep+'macro_%d_cluster_centers_index.dat'%(i+1),
+                   traj_idx,
+                   header='#Idx of macro center is {}'.format(c_idx),
                    fmt='%d')
 
 
@@ -214,3 +228,15 @@ def getPop(index):
     num = np.unique(index).shape[0]
     pop = [np.where(index == i)[0].shape[0] for i in range(num)]
     return np.array(pop)
+
+def find_clusterCenter_IDX(center_coords, traj_coords):
+    dists = []
+    for p in traj_coords:
+        dists.append(np.linalg.norm((center_coords-p)))
+    dists = np.array(dists)
+    return dists.argmin(), dists.min()
+
+
+class Cluster():
+    def __init__():
+        return 0
